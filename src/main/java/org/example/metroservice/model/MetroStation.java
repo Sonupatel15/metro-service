@@ -25,4 +25,8 @@ public class MetroStation {
 
     @OneToMany(mappedBy = "toStation", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Fare> fareTo;
+
+    @OneToMany(mappedBy = "metroStation", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<StationManager> stationManagers;
 }
+
