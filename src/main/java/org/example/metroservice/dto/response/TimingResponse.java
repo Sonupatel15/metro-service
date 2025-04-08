@@ -13,6 +13,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class TimingResponse {
+    private UUID timingId;
     private UUID travelId;
     private Timestamp checkin;
     private Timestamp checkout;

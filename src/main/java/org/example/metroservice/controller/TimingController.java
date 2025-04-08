@@ -7,6 +7,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
+
 @RestController
 @RequestMapping("/api/timings")
 @RequiredArgsConstructor
@@ -23,6 +25,12 @@ public class TimingController {
     @PostMapping("/checkout")
     public ResponseEntity<TimingResponse> checkOut(@RequestBody TimingRequest request) {
         TimingResponse response = timingService.checkOut(request);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{timingId}")
+    public ResponseEntity<TimingResponse> getTiming(@PathVariable UUID timingId) {
+        TimingResponse response = timingService.getTimingById(timingId);
         return ResponseEntity.ok(response);
     }
 
