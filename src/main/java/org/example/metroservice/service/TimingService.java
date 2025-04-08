@@ -1,81 +1,10 @@
-//package org.example.metroservice.service;
-//
-//import lombok.RequiredArgsConstructor;
-//import org.example.metroservice.dto.request.TimingRequest;
-//import org.example.metroservice.model.Timing;
-//import org.example.metroservice.repository.TimingRepository;
-//import org.springframework.beans.factory.annotation.Value;
-//import org.springframework.stereotype.Service;
-//import org.springframework.transaction.annotation.Transactional;
-//import org.springframework.web.client.RestTemplate;
-//
-//import java.sql.Timestamp;
-//import java.util.UUID;
-//
-//@Service
-//@RequiredArgsConstructor
-//public class TimingService {
-//
-//    private final TimingRepository timingRepository;
-//    private final RestTemplate restTemplate;
-//
-//    @Value("${user.service.url}")
-//    private String userServiceUrl; // e.g., http://localhost:8081
-//
-//    @Transactional
-//    public void checkIn(TimingRequest request) {
-//        UUID travelId = request.getTravelId();
-//
-//        if (timingRepository.findByTravelId(travelId) != null) {
-//            throw new IllegalArgumentException("Check-in already recorded for travelId: " + travelId);
-//        }
-//
-//        Timing timing = Timing.builder()
-//                .travelId(travelId)
-//                .checkin(new Timestamp(System.currentTimeMillis()))
-//                .build();
-//
-//        timingRepository.save(timing);
-//
-//        // Notify User Service (STARTED)
-//        notifyUserService(travelId, "start");
-//    }
-//
-//    @Transactional
-//    public void checkOut(TimingRequest request) {
-//        UUID travelId = request.getTravelId();
-//
-//        Timing timing = timingRepository.findByTravelId(travelId);
-//        if (timing == null) {
-//            throw new IllegalArgumentException("No check-in found for travelId: " + travelId);
-//        }
-//
-//        if (timing.getCheckout() != null) {
-//            throw new IllegalArgumentException("Checkout already recorded for travelId: " + travelId);
-//        }
-//
-//        timing.setCheckout(new Timestamp(System.currentTimeMillis()));
-//        timingRepository.save(timing);
-//
-//        // Notify User Service (COMPLETED)
-//        notifyUserService(travelId, "complete");
-//    }
-//
-//    private void notifyUserService(UUID travelId, String status) {
-//        try {
-//            String url = userServiceUrl + "/api/travel-history/status/" + status + "/" + travelId;
-//            restTemplate.put(url, null);
-//        } catch (Exception e) {
-//            throw new RuntimeException("Failed to notify User Service: " + e.getMessage());
-//        }
-//    }
-//}
-
-
 package org.example.metroservice.service;
 
 import lombok.RequiredArgsConstructor;
+import org.example.metroservice.dto.request.PenaltyRequest;
 import org.example.metroservice.dto.request.TimingRequest;
+import org.example.metroservice.dto.response.PenaltyResponse;
+import org.example.metroservice.dto.response.PenaltyStatusResponse;
 import org.example.metroservice.dto.response.TimingResponse;
 import org.example.metroservice.model.Timing;
 import org.example.metroservice.repository.TimingRepository;
@@ -86,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.util.UUID;
 
 @Service
@@ -96,7 +26,9 @@ public class TimingService {
     private final RestTemplate restTemplate;
 
     @Value("${user.service.url}")
-    private String userServiceUrl; // e.g., http://localhost:8081
+    private String userServiceUrl; //
+    @Value("${payment.service.url}")
+    private String paymentServiceUrl;
 
     private void validateTravelIdExists(UUID travelId) {
         String url = userServiceUrl + "/api/travel-history/exists/" + travelId;
@@ -136,6 +68,27 @@ public class TimingService {
                 .build();
     }
 
+    private void notifyUserService(UUID travelId, String status) {
+        try {
+            String url = userServiceUrl + "/api/travel-history/status/" + status + "/" + travelId;
+            restTemplate.put(url, null);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to notify User Service: " + e.getMessage());
+        }
+    }
+
+    public TimingResponse getTimingById(UUID timingId) {
+        Timing timing = timingRepository.findById(timingId)
+                .orElseThrow(() -> new RuntimeException("Timing not found"));
+
+        return TimingResponse.builder()
+                .timingId(timing.getTimingId())
+                .travelId(timing.getTravelId())
+                .checkin(timing.getCheckin())
+                .checkout(timing.getCheckout())
+                .build();
+    }
+
     @Transactional
     public TimingResponse checkOut(TimingRequest request) {
         UUID travelId = request.getTravelId();
@@ -150,28 +103,51 @@ public class TimingService {
             throw new IllegalArgumentException("Checkout already recorded for travelId: " + travelId);
         }
 
+        // Record checkout time first
         Timestamp checkoutTime = new Timestamp(System.currentTimeMillis());
         timing.setCheckout(checkoutTime);
         timingRepository.save(timing);
 
-        // Notify User Service to update status to COMPLETED
+        // Calculate duration in minutes
+        long durationMinutes = Duration.between(
+                timing.getCheckin().toInstant(),
+                checkoutTime.toInstant()
+        ).toMinutes();
+
+        // Apply penalty if duration > 90 minutes
+        if (durationMinutes > 90) {
+            try {
+                // Call Penalty Service
+                PenaltyRequest penaltyRequest = new PenaltyRequest();
+                penaltyRequest.setTravelId(travelId);
+                penaltyRequest.setTimingId(timing.getTimingId());
+
+                ResponseEntity<PenaltyResponse> penaltyResponse = restTemplate.postForEntity(
+                        paymentServiceUrl + "/penalties",
+                        penaltyRequest,
+                        PenaltyResponse.class
+                );
+
+                if (!penaltyResponse.getStatusCode().is2xxSuccessful()) {
+                    // Log penalty failure but don't block checkout
+                    System.err.println("Penalty application failed but checkout completed");
+                }
+            } catch (Exception e) {
+                System.err.println("Error calling penalty service: " + e.getMessage());
+            }
+        }
+
+        // Update travel status to COMPLETED (regardless of penalty)
         notifyUserService(travelId, "complete");
 
         return TimingResponse.builder()
+                .timingId(timing.getTimingId())
                 .travelId(travelId)
                 .checkin(timing.getCheckin())
                 .checkout(checkoutTime)
                 .status("COMPLETED")
-                .message("Checkout recorded successfully.")
+                .message("Checkout recorded successfully" +
+                        (durationMinutes > 90 ? " (Penalty applied)" : ""))
                 .build();
-    }
-
-    private void notifyUserService(UUID travelId, String status) {
-        try {
-            String url = userServiceUrl + "/api/travel-history/status/" + status + "/" + travelId;
-            restTemplate.put(url, null);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to notify User Service: " + e.getMessage());
-        }
     }
 }
