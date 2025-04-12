@@ -141,10 +141,13 @@ The Metro Service is a comprehensive system that manages three core aspects of m
 
     ```json
     {
-      "travelId": "user-provided-id", 
-      "stationId": 1
+      "travelId": "ef9ff112-d701-4940-babc-5c3c0ad432d1"
     }
     ```
+
+* **Response:**
+
+    ![Check In Response](https://github.com/user-attachments/assets/4943b21f-125e-4b2e-a677-f9cf8f370f61)
 
 ### Check Out
 
@@ -155,10 +158,13 @@ The Metro Service is a comprehensive system that manages three core aspects of m
 
     ```json
     {
-      "travelId": "user-provided-id", 
-      "stationId": 5
+      "travelId": "ef9ff112-d701-4940-babc-5c3c0ad432d1"
     }
     ```
+
+* **Response:**
+
+    ![Check Out Response](https://github.com/user-attachments/assets/14688228-45f4-430c-b157-77d77b33448a)
 
 ### Get Timing Details
 
@@ -167,24 +173,4 @@ The Metro Service is a comprehensive system that manages three core aspects of m
 * **Description:** Retrieves complete timing record
 * **Response:**
 
-    ```json
-    {
-      "id": 1,
-      "travelId": "user-provided-id",
-      "checkInStationId": 1,
-      "checkInTime": "2025-04-12T06:00:00Z",
-      "checkOutStationId": 5,
-      "checkOutTime": "2025-04-12T06:45:00Z",
-      "durationSeconds": 2700,
-      "penaltyApplied": false
-    }
-    ```
-
-
-
-
-
-
-
-
-
+    ![Get Timing Details Response](https://github.com/user-attachments/assets/db078ac9-2950-4c17-ac74-9b8b65dbfac0)
